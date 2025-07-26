@@ -697,8 +697,32 @@
             const privacyRadios = document.querySelectorAll('input[name="privacy"]');
             const navLinks = document.querySelectorAll('.nav-link');
             const pages = document.querySelectorAll('.page');
-            
+
             let currentFileId = null;
+
+            // Load existing files
+            fetch('/api/files')
+                .then(res => res.json())
+                .then(files => {
+                    if (files.length > 0) uploadedFiles.classList.remove('hidden');
+                    files.forEach(f => {
+                        const item = createFileItem({ name: f.name, type: f.type || '', size: f.size || 0 }, f.id);
+                        const progressBar = item.querySelector('.progress-bar');
+                        const progressText = item.querySelector('.progress-text');
+                        const statusText = item.querySelector('.status-text');
+                        progressBar.style.width = '100%';
+                        progressText.textContent = '100%';
+                        statusText.textContent = 'Completed';
+                        const actionsDiv = item.querySelector('.file-actions');
+                        actionsDiv.innerHTML = `
+                            <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${f.id}">
+                                View Details
+                            </button>
+                        `;
+                        fileList.appendChild(item);
+                        actionsDiv.querySelector('.view-details').addEventListener('click', () => openFileModal(f.id, f.name));
+                    });
+                });
             
             // Page navigation
             navLinks.forEach(link => {
@@ -767,39 +791,48 @@
                 const fileId = generateId();
                 const fileItem = createFileItem(file, fileId);
                 fileList.appendChild(fileItem);
-                
-                // Simulate upload progress
-                let progress = 0;
+
                 const progressBar = fileItem.querySelector('.progress-bar');
                 const progressText = fileItem.querySelector('.progress-text');
                 const statusText = fileItem.querySelector('.status-text');
-                
-                const interval = setInterval(() => {
-                    progress += Math.random() * 10;
-                    if (progress >= 100) {
-                        progress = 100;
-                        clearInterval(interval);
-                        
-                        setTimeout(() => {
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload');
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        progressBar.style.width = `${percent}%`;
+                        progressText.textContent = `${Math.round(percent)}%`;
+                    }
+                });
+
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState === XMLHttpRequest.DONE) {
+                        if (xhr.status === 200) {
                             progressBar.style.width = '100%';
                             progressText.textContent = '100%';
                             statusText.textContent = 'Completed';
-                            
+
+                            const res = JSON.parse(xhr.responseText);
                             const actionsDiv = fileItem.querySelector('.file-actions');
                             actionsDiv.innerHTML = `
-                                <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${fileId}">
+                                <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${res.id}">
                                     View Details
                                 </button>
                             `;
-                            
+
                             const viewDetailsBtn = actionsDiv.querySelector('.view-details');
-                            viewDetailsBtn.addEventListener('click', () => openFileModal(fileId, file.name));
-                        }, 500);
-                    } else {
-                        progressBar.style.width = `${progress}%`;
-                        progressText.textContent = `${Math.round(progress)}%`;
+                            viewDetailsBtn.addEventListener('click', () => openFileModal(res.id, file.name));
+                        } else {
+                            statusText.textContent = 'Error';
+                        }
                     }
-                }, 200);
+                };
+
+                const formData = new FormData();
+                formData.append('file', file);
+                xhr.send(formData);
             }
             
             function createFileItem(file, id) {
@@ -880,12 +913,16 @@
             function openFileModal(fileId, fileName) {
                 currentFileId = fileId;
                 document.getElementById('modal-title').textContent = fileName;
-                
-                // Generate a fake share link
-                const randomString = Math.random().toString(36).substring(2, 10);
-                shareLink.value = `https://nightshare.io/f/${randomString}`;
-                
-                fileModal.classList.remove('hidden');
+
+                fetch(`/api/files/${fileId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        shareLink.value = `${location.origin}/files/${data.id}`;
+
+                        document.querySelector(`input[value="${data.privacy}"]`).checked = true;
+                        privacyRadios.forEach(r => r.dispatchEvent(new Event('change')));
+                        fileModal.classList.remove('hidden');
+                    });
             }
             
             closeModal.addEventListener('click', () => {
@@ -930,33 +967,34 @@
             
             saveSettings.addEventListener('click', () => {
                 const selectedPrivacy = document.querySelector('input[name="privacy"]:checked').value;
-                
-                // Show notification
-                const notification = document.createElement('div');
-                notification.className = 'fixed bottom-4 right-4 bg-neon-pink text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
-                notification.style.animation = 'fadeIn 0.3s ease';
-                notification.innerHTML = `
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span>Settings saved! File is now <strong>${selectedPrivacy}</strong>.</span>
-                `;
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.style.opacity = '0';
-                    notification.style.transition = 'opacity 0.5s ease';
+
+                fetch(`/api/files/${currentFileId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ privacy: selectedPrivacy })
+                }).then(() => {
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed bottom-4 right-4 bg-neon-pink text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
+                    notification.style.animation = 'fadeIn 0.3s ease';
+                    notification.innerHTML = `
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        <span>Settings saved! File is now <strong>${selectedPrivacy}</strong>.</span>
+                    `;
+                    document.body.appendChild(notification);
                     setTimeout(() => {
-                        document.body.removeChild(notification);
-                    }, 500);
-                }, 3000);
-                
-                fileModal.classList.add('hidden');
+                        notification.style.opacity = '0';
+                        notification.style.transition = 'opacity 0.5s ease';
+                        setTimeout(() => document.body.removeChild(notification), 500);
+                    }, 3000);
+                    fileModal.classList.add('hidden');
+                });
             });
             
             deleteFile.addEventListener('click', () => {
                 if (currentFileId) {
+                    fetch(`/api/files/${currentFileId}`, { method: 'DELETE' }).then(() => {
                     const fileItem = document.querySelector(`.file-item[data-id="${currentFileId}"]`);
                     if (fileItem) {
                         fileItem.style.height = fileItem.offsetHeight + 'px';
@@ -1000,9 +1038,10 @@
                             document.body.removeChild(notification);
                         }, 500);
                     }, 3000);
-                    
+
                     fileModal.classList.add('hidden');
                     currentFileId = null;
+                });
                 }
             });
             
