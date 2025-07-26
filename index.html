@@ -767,39 +767,53 @@
                 const fileId = generateId();
                 const fileItem = createFileItem(file, fileId);
                 fileList.appendChild(fileItem);
-                
-                // Simulate upload progress
-                let progress = 0;
+
                 const progressBar = fileItem.querySelector('.progress-bar');
                 const progressText = fileItem.querySelector('.progress-text');
                 const statusText = fileItem.querySelector('.status-text');
-                
-                const interval = setInterval(() => {
-                    progress += Math.random() * 10;
-                    if (progress >= 100) {
-                        progress = 100;
-                        clearInterval(interval);
-                        
-                        setTimeout(() => {
+                const actionsDiv = fileItem.querySelector('.file-actions');
+
+                const xhr = new XMLHttpRequest();
+                const formData = new FormData();
+                formData.append('file', file);
+                const privacy = document.querySelector('input[name="privacy"]:checked');
+                if (privacy) {
+                    formData.append('privacy', privacy.value);
+                }
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        progressBar.style.width = `${percent}%`;
+                        progressText.textContent = `${Math.round(percent)}%`;
+                    }
+                });
+
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === XMLHttpRequest.DONE) {
+                        if (xhr.status === 200) {
+                            const res = JSON.parse(xhr.responseText);
                             progressBar.style.width = '100%';
                             progressText.textContent = '100%';
                             statusText.textContent = 'Completed';
-                            
-                            const actionsDiv = fileItem.querySelector('.file-actions');
+
                             actionsDiv.innerHTML = `
-                                <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${fileId}">
+                                <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${res.file.id}">
                                     View Details
                                 </button>
                             `;
-                            
+
                             const viewDetailsBtn = actionsDiv.querySelector('.view-details');
-                            viewDetailsBtn.addEventListener('click', () => openFileModal(fileId, file.name));
-                        }, 500);
-                    } else {
-                        progressBar.style.width = `${progress}%`;
-                        progressText.textContent = `${Math.round(progress)}%`;
+                            viewDetailsBtn.addEventListener('click', () => openFileModal(res.file.id, file.name));
+                        } else {
+                            statusText.textContent = 'Error';
+                            actionsDiv.innerHTML = '<span class="text-red-500">Upload failed</span>';
+                        }
                     }
-                }, 200);
+                };
+
+                xhr.open('POST', '/upload');
+                xhr.send(formData);
             }
             
             function createFileItem(file, id) {
@@ -880,11 +894,9 @@
             function openFileModal(fileId, fileName) {
                 currentFileId = fileId;
                 document.getElementById('modal-title').textContent = fileName;
-                
-                // Generate a fake share link
-                const randomString = Math.random().toString(36).substring(2, 10);
-                shareLink.value = `https://nightshare.io/f/${randomString}`;
-                
+
+                shareLink.value = `${window.location.origin}/files/${fileId}`;
+
                 fileModal.classList.remove('hidden');
             }
             
@@ -930,69 +942,25 @@
             
             saveSettings.addEventListener('click', () => {
                 const selectedPrivacy = document.querySelector('input[name="privacy"]:checked').value;
-                
-                // Show notification
-                const notification = document.createElement('div');
-                notification.className = 'fixed bottom-4 right-4 bg-neon-pink text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
-                notification.style.animation = 'fadeIn 0.3s ease';
-                notification.innerHTML = `
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span>Settings saved! File is now <strong>${selectedPrivacy}</strong>.</span>
-                `;
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.style.opacity = '0';
-                    notification.style.transition = 'opacity 0.5s ease';
-                    setTimeout(() => {
-                        document.body.removeChild(notification);
-                    }, 500);
-                }, 3000);
-                
-                fileModal.classList.add('hidden');
-            });
-            
-            deleteFile.addEventListener('click', () => {
-                if (currentFileId) {
-                    const fileItem = document.querySelector(`.file-item[data-id="${currentFileId}"]`);
-                    if (fileItem) {
-                        fileItem.style.height = fileItem.offsetHeight + 'px';
-                        fileItem.style.opacity = '0';
-                        fileItem.style.transform = 'translateY(-20px)';
-                        fileItem.style.transition = 'all 0.3s ease';
-                        
-                        setTimeout(() => {
-                            fileItem.style.height = '0';
-                            fileItem.style.padding = '0';
-                            fileItem.style.margin = '0';
-                            fileItem.style.overflow = 'hidden';
-                            
-                            setTimeout(() => {
-                                fileList.removeChild(fileItem);
-                                
-                                if (fileList.children.length === 0) {
-                                    uploadedFiles.classList.add('hidden');
-                                }
-                            }, 300);
-                        }, 300);
-                    }
-                    
-                    // Show notification
+                if (!currentFileId) return;
+
+                fetch(`/files/${currentFileId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ privacy: selectedPrivacy })
+                }).then(() => {
                     const notification = document.createElement('div');
-                    notification.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
+                    notification.className = 'fixed bottom-4 right-4 bg-neon-pink text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
                     notification.style.animation = 'fadeIn 0.3s ease';
                     notification.innerHTML = `
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
-                        <span>File deleted successfully!</span>
+                        <span>Settings saved! File is now <strong>${selectedPrivacy}</strong>.</span>
                     `;
-                    
+
                     document.body.appendChild(notification);
-                    
+
                     setTimeout(() => {
                         notification.style.opacity = '0';
                         notification.style.transition = 'opacity 0.5s ease';
@@ -1000,10 +968,62 @@
                             document.body.removeChild(notification);
                         }, 500);
                     }, 3000);
-                    
+
                     fileModal.classList.add('hidden');
-                    currentFileId = null;
-                }
+                });
+            });
+            
+            deleteFile.addEventListener('click', () => {
+                if (!currentFileId) return;
+
+                fetch(`/files/${currentFileId}`, { method: 'DELETE' })
+                    .then(() => {
+                        const fileItem = document.querySelector(`.file-item[data-id="${currentFileId}"]`);
+                        if (fileItem) {
+                            fileItem.style.height = fileItem.offsetHeight + 'px';
+                            fileItem.style.opacity = '0';
+                            fileItem.style.transform = 'translateY(-20px)';
+                            fileItem.style.transition = 'all 0.3s ease';
+
+                            setTimeout(() => {
+                                fileItem.style.height = '0';
+                                fileItem.style.padding = '0';
+                                fileItem.style.margin = '0';
+                                fileItem.style.overflow = 'hidden';
+
+                                setTimeout(() => {
+                                    fileList.removeChild(fileItem);
+
+                                    if (fileList.children.length === 0) {
+                                        uploadedFiles.classList.add('hidden');
+                                    }
+                                }, 300);
+                            }, 300);
+                        }
+
+                        const notification = document.createElement('div');
+                        notification.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
+                        notification.style.animation = 'fadeIn 0.3s ease';
+                        notification.innerHTML = `
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>File deleted successfully!</span>
+                        `;
+
+                        document.body.appendChild(notification);
+
+                        setTimeout(() => {
+                            notification.style.opacity = '0';
+                            notification.style.transition = 'opacity 0.5s ease';
+                            setTimeout(() => {
+                                document.body.removeChild(notification);
+                            }, 500);
+                        }, 3000);
+
+                        fileModal.classList.add('hidden');
+                        currentFileId = null;
+                    });
             });
             
             // Close modal when clicking outside
