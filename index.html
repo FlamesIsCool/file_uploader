@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NightShare - File Sharing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'night': '#0a0a0a',
+                        'night-light': '#141414',
+                        'night-lighter': '#1e1e1e',
+                        'neon-pink': '#ff2d95',
+                        'neon-pink-light': '#ff5db1',
+                        'neon-pink-dark': '#d81b7e',
+                        'neon-purple': '#9d4edd',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            background-image: 
+                radial-gradient(circle at 25% 10%, rgba(255, 45, 149, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 75% 75%, rgba(157, 78, 221, 0.1) 0%, transparent 30%);
+            background-attachment: fixed;
+        }
+        
+        .upload-area {
+            border: 2px dashed #ff2d95;
+            transition: all 0.3s ease;
+            background: rgba(30, 30, 30, 0.4);
+            backdrop-filter: blur(10px);
+        }
+        
+        .upload-area:hover, .upload-area.dragging {
+            border-color: #ff5db1;
+            background-color: rgba(255, 45, 149, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(255, 45, 149, 0.2);
+        }
+        
+        .btn-pink {
+            background-color: #ff2d95;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 45, 149, 0.3);
+        }
+        
+        .btn-pink:hover {
+            background-color: #ff5db1;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 45, 149, 0.4);
+        }
+        
+        .file-item {
+            animation: fadeIn 0.5s;
+            background: rgba(30, 30, 30, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #ff2d95, #9d4edd);
+            transition: width 0.3s ease;
+        }
+        
+        .card {
+            background: rgba(20, 20, 20, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -5px rgba(255, 45, 149, 0.2);
+        }
+        
+        .nav-link {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: #ff2d95;
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after, .nav-link.active::after {
+            width: 100%;
+        }
+        
+        .nav-link.active {
+            color: #ff2d95;
+        }
+        
+        .glow-text {
+            text-shadow: 0 0 10px rgba(255, 45, 149, 0.5);
+        }
+        
+        .toggle-btn {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            border-radius: 12px;
+            background-color: #2d2d2d;
+            transition: all 0.3s ease;
+        }
+        
+        .toggle-btn.active {
+            background-color: #ff2d95;
+        }
+        
+        .toggle-btn::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .toggle-btn.active::after {
+            left: 28px;
+        }
+        
+        .glass-card {
+            background: rgba(30, 30, 30, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, rgba(30, 30, 30, 0.8), rgba(20, 20, 20, 0.8));
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -5px rgba(255, 45, 149, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="bg-night-light py-4 px-6 shadow-lg sticky top-0 z-50 border-b border-gray-800">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <svg class="w-8 h-8 text-neon-pink" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 13H5.5zm9.5-3.5a3.5 3.5 0 10-7 0 3.5 3.5 0 007 0z"></path>
+                </svg>
+                <h1 class="text-2xl font-bold ml-2">Night<span class="text-neon-pink glow-text">Share</span></h1>
+            </div>
+            <nav>
+                <ul class="flex space-x-8">
+                    <li><a href="#" class="nav-link active" data-page="home">Home</a></li>
+                    <li><a href="#" class="nav-link" data-page="my-files">My Files</a></li>
+                    <li><a href="#" class="nav-link" data-page="about">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto flex-grow px-4 py-8">
+        <!-- Home Page -->
+        <div id="home" class="page active">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4">Share Files with <span class="text-neon-pink glow-text">Style</span></h1>
+                    <p class="text-xl text-gray-300 max-w-2xl mx-auto">Upload, share, and manage your files with our sleek and secure platform. Control who sees your content with customizable privacy settings.</p>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8 mb-12">
+                    <h2 class="text-2xl font-semibold mb-6 flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        Upload Your Files
+                    </h2>
+                    <div id="upload-area" class="upload-area rounded-2xl p-10 text-center cursor-pointer">
+                        <svg class="w-20 h-20 mx-auto text-neon-pink mb-6 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="text-xl mb-3">Drag & drop files here</p>
+                        <p class="text-gray-400 mb-6">or</p>
+                        <label class="btn-pink px-8 py-4 rounded-full text-white font-medium cursor-pointer hover:shadow-lg inline-block">
+                            Browse Files
+                            <input type="file" id="file-input" class="hidden" multiple>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="uploaded-files" class="glass-card rounded-2xl shadow-lg p-8 mb-12 hidden">
+                    <h2 class="text-2xl font-semibold mb-6 flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Uploaded Files
+                    </h2>
+                    <div id="file-list" class="space-y-4">
+                        <!-- Files will be added here dynamically -->
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                    <div class="stat-card rounded-xl p-6 text-center">
+                        <div class="text-neon-pink text-4xl font-bold mb-2">100%</div>
+                        <div class="text-gray-300">Secure Uploads</div>
+                    </div>
+                    <div class="stat-card rounded-xl p-6 text-center">
+                        <div class="text-neon-pink text-4xl font-bold mb-2">10 GB</div>
+                        <div class="text-gray-300">Free Storage</div>
+                    </div>
+                    <div class="stat-card rounded-xl p-6 text-center">
+                        <div class="text-neon-pink text-4xl font-bold mb-2">3</div>
+                        <div class="text-gray-300">Privacy Options</div>
+                    </div>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8">
+                    <h2 class="text-2xl font-semibold mb-6">How It Works</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-night-lighter rounded-full flex items-center justify-center mx-auto mb-4 border border-neon-pink">
+                                <svg class="w-8 h-8 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">1. Upload</h3>
+                            <p class="text-gray-400">Drag & drop or browse to upload your files securely</p>
+                        </div>
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-night-lighter rounded-full flex items-center justify-center mx-auto mb-4 border border-neon-pink">
+                                <svg class="w-8 h-8 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">2. Share</h3>
+                            <p class="text-gray-400">Get a unique link to share your files with others</p>
+                        </div>
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-night-lighter rounded-full flex items-center justify-center mx-auto mb-4 border border-neon-pink">
+                                <svg class="w-8 h-8 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">3. Control</h3>
+                            <p class="text-gray-400">Set privacy levels: private, unlisted, or public</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- My Files Page -->
+        <div id="my-files" class="page">
+            <div class="max-w-5xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h1 class="text-3xl font-bold">My Files</h1>
+                    <div class="flex space-x-4">
+                        <div class="relative">
+                            <input type="text" placeholder="Search files..." class="bg-night-lighter border border-gray-700 rounded-lg px-4 py-2 pl-10 focus:outline-none focus:border-neon-pink">
+                            <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <select class="bg-night-lighter border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-neon-pink">
+                            <option>All Files</option>
+                            <option>Images</option>
+                            <option>Documents</option>
+                            <option>Videos</option>
+                            <option>Others</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-6 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Recent Files</h2>
+                        <button class="text-neon-pink hover:text-neon-pink-light transition">View All</button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="file-item rounded-xl p-4 flex flex-col md:flex-row md:items-center">
+                            <div class="flex items-center mb-3 md:mb-0 md:mr-4">
+                                <div class="text-neon-pink mr-3">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-grow min-w-0">
+                                    <h3 class="font-medium text-white truncate" title="vacation_photos.zip">vacation_photos.zip</h3>
+                                    <p class="text-sm text-gray-400">15.2 MB • Uploaded 2 days ago</p>
+                                </div>
+                            </div>
+                            <div class="flex-grow md:mx-4 mb-3 md:mb-0">
+                                <div class="flex items-center">
+                                    <span class="bg-green-500 bg-opacity-20 text-green-400 text-xs px-2 py-1 rounded-full mr-2">Public</span>
+                                    <span class="text-gray-400 text-sm">12 downloads</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="file-item rounded-xl p-4 flex flex-col md:flex-row md:items-center">
+                            <div class="flex items-center mb-3 md:mb-0 md:mr-4">
+                                <div class="text-neon-pink mr-3">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-grow min-w-0">
+                                    <h3 class="font-medium text-white truncate" title="project_proposal.pdf">project_proposal.pdf</h3>
+                                    <p class="text-sm text-gray-400">2.4 MB • Uploaded 5 days ago</p>
+                                </div>
+                            </div>
+                            <div class="flex-grow md:mx-4 mb-3 md:mb-0">
+                                <div class="flex items-center">
+                                    <span class="bg-yellow-500 bg-opacity-20 text-yellow-400 text-xs px-2 py-1 rounded-full mr-2">Unlisted</span>
+                                    <span class="text-gray-400 text-sm">3 downloads</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="file-item rounded-xl p-4 flex flex-col md:flex-row md:items-center">
+                            <div class="flex items-center mb-3 md:mb-0 md:mr-4">
+                                <div class="text-neon-pink mr-3">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-grow min-w-0">
+                                    <h3 class="font-medium text-white truncate" title="presentation_video.mp4">presentation_video.mp4</h3>
+                                    <p class="text-sm text-gray-400">45.8 MB • Uploaded 1 week ago</p>
+                                </div>
+                            </div>
+                            <div class="flex-grow md:mx-4 mb-3 md:mb-0">
+                                <div class="flex items-center">
+                                    <span class="bg-blue-500 bg-opacity-20 text-blue-400 text-xs px-2 py-1 rounded-full mr-2">Private</span>
+                                    <span class="text-gray-400 text-sm">0 downloads</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                </button>
+                                <button class="p-2 bg-night rounded-lg hover:bg-night-lighter transition">
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-card rounded-2xl shadow-lg p-6">
+                        <h2 class="text-xl font-semibold mb-4">Storage Usage</h2>
+                        <div class="mb-4">
+                            <div class="h-4 bg-night-lighter rounded-full overflow-hidden">
+                                <div class="h-full bg-gradient-to-r from-neon-pink to-neon-purple" style="width: 35%"></div>
+                            </div>
+                            <div class="flex justify-between mt-2 text-sm">
+                                <span>3.5 GB used</span>
+                                <span>10 GB total</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-sm text-gray-400">Images</div>
+                                <div class="text-lg font-medium">1.2 GB</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Videos</div>
+                                <div class="text-lg font-medium">1.8 GB</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Documents</div>
+                                <div class="text-lg font-medium">0.3 GB</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Others</div>
+                                <div class="text-lg font-medium">0.2 GB</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card rounded-2xl shadow-lg p-6">
+                        <h2 class="text-xl font-semibold mb-4">Recent Activity</h2>
+                        <div class="space-y-4">
+                            <div class="flex items-start">
+                                <div class="bg-neon-pink bg-opacity-20 p-2 rounded-lg mr-3">
+                                    <svg class="w-5 h-5 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium">You uploaded <span class="text-neon-pink">vacation_photos.zip</span></p>
+                                    <p class="text-sm text-gray-400">2 days ago</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start">
+                                <div class="bg-green-500 bg-opacity-20 p-2 rounded-lg mr-3">
+                                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium">Someone downloaded <span class="text-neon-pink">project_proposal.pdf</span></p>
+                                    <p class="text-sm text-gray-400">3 days ago</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start">
+                                <div class="bg-yellow-500 bg-opacity-20 p-2 rounded-lg mr-3">
+                                    <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium">You changed <span class="text-neon-pink">presentation_video.mp4</span> to private</p>
+                                    <p class="text-sm text-gray-400">5 days ago</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- About Page -->
+        <div id="about" class="page">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4">About <span class="text-neon-pink glow-text">NightShare</span></h1>
+                    <p class="text-xl text-gray-300 max-w-2xl mx-auto">The most stylish and secure way to share your files online.</p>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8 mb-12">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                        <div>
+                            <h2 class="text-2xl font-semibold mb-4">Our Mission</h2>
+                            <p class="text-gray-300 mb-4">NightShare was created with a simple goal: to make file sharing beautiful, intuitive, and secure. We believe that sharing your important files shouldn't be complicated or boring.</p>
+                            <p class="text-gray-300">Our platform combines sleek design with powerful functionality, giving you complete control over your content while making the experience enjoyable.</p>
+                        </div>
+                        <div class="flex justify-center">
+                            <div class="w-64 h-64 rounded-full bg-gradient-to-br from-neon-pink to-neon-purple flex items-center justify-center">
+                                <svg class="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M5.5 17a4.5 4.5 0 01-1.44-8.765 4.5 4.5 0 018.302-3.046 3.5 3.5 0 014.504 4.272A4 4 0 0115 17H5.5zm3.75-2.75a.75.75 0 001.5 0V9.66l1.95 2.1a.75.75 0 101.1-1.02l-3.25-3.5a.75.75 0 00-1.1 0l-3.25 3.5a.75.75 0 101.1 1.02l1.95-2.1v4.59z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8 mb-12">
+                    <h2 class="text-2xl font-semibold mb-6">Key Features</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="bg-night-lighter rounded-xl p-6">
+                            <div class="w-12 h-12 bg-neon-pink bg-opacity-20 rounded-lg flex items-center justify-center mb-4">
+                                <svg class="w-6 h-6 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">Privacy Controls</h3>
+                            <p class="text-gray-400">Choose between private, unlisted, or public sharing options for each file you upload.</p>
+                        </div>
+                        <div class="bg-night-lighter rounded-xl p-6">
+                            <div class="w-12 h-12 bg-neon-pink bg-opacity-20 rounded-lg flex items-center justify-center mb-4">
+                                <svg class="w-6 h-6 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">Fast Transfers</h3>
+                            <p class="text-gray-400">Upload and download files at lightning speed with our optimized transfer technology.</p>
+                        </div>
+                        <div class="bg-night-lighter rounded-xl p-6">
+                            <div class="w-12 h-12 bg-neon-pink bg-opacity-20 rounded-lg flex items-center justify-center mb-4">
+                                <svg class="w-6 h-6 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-medium mb-2">Secure Storage</h3>
+                            <p class="text-gray-400">All files are encrypted and stored securely on our protected cloud infrastructure.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8 mb-12">
+                    <h2 class="text-2xl font-semibold mb-6">Frequently Asked Questions</h2>
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-xl font-medium mb-2">What file types can I upload?</h3>
+                            <p class="text-gray-400">You can upload almost any file type to NightShare, including images, videos, documents, archives, and more.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-medium mb-2">How long are my files stored?</h3>
+                            <p class="text-gray-400">Free accounts can store files for up to 30 days. Premium accounts have unlimited storage time.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-medium mb-2">What's the maximum file size?</h3>
+                            <p class="text-gray-400">Free accounts can upload files up to 500MB. Premium accounts can upload files up to 10GB.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-medium mb-2">How secure is NightShare?</h3>
+                            <p class="text-gray-400">We use industry-standard encryption for all files and transfers. Your private files can only be accessed by you or those you share links with.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="glass-card rounded-2xl shadow-lg p-8 text-center">
+                    <h2 class="text-2xl font-semibold mb-4">Ready to get started?</h2>
+                    <p class="text-gray-300 mb-6 max-w-2xl mx-auto">Join thousands of users who trust NightShare for their file sharing needs. Upload your first file today!</p>
+                    <button class="btn-pink px-8 py-4 rounded-full text-white font-medium hover:shadow-lg inline-block">
+                        Start Uploading Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- File Details Modal -->
+    <div id="file-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="glass-card rounded-2xl shadow-xl max-w-lg w-full mx-4">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-semibold" id="modal-title">File Details</h3>
+                    <button id="close-modal" class="text-gray-400 hover:text-white transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-6">
+                    <p class="text-gray-400 mb-2">Share Link</p>
+                    <div class="flex">
+                        <input id="share-link" type="text" readonly class="bg-night-lighter text-white px-4 py-3 rounded-l-lg flex-grow focus:outline-none border border-gray-800" value="https://nightshare.io/f/example123">
+                        <button id="copy-link" class="bg-neon-pink text-white px-4 py-3 rounded-r-lg hover:bg-neon-pink-light transition">Copy</button>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <p class="text-gray-400 mb-4">Privacy Settings</p>
+                    <div class="space-y-5">
+                        <div class="flex items-center justify-between p-3 rounded-lg hover:bg-night-lighter transition cursor-pointer">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="privacy" value="private" class="hidden" checked>
+                                <div class="w-5 h-5 rounded-full border-2 border-neon-pink mr-3 flex items-center justify-center">
+                                    <div class="w-3 h-3 rounded-full bg-neon-pink private-radio"></div>
+                                </div>
+                                <div>
+                                    <span class="font-medium">Private</span>
+                                    <p class="text-sm text-gray-400">Only you can access this file</p>
+                                </div>
+                            </label>
+                            <svg class="w-5 h-5 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 rounded-lg hover:bg-night-lighter transition cursor-pointer">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="privacy" value="unlisted" class="hidden">
+                                <div class="w-5 h-5 rounded-full border-2 border-gray-500 mr-3 flex items-center justify-center">
+                                    <div class="w-3 h-3 rounded-full bg-neon-pink unlisted-radio hidden"></div>
+                                </div>
+                                <div>
+                                    <span class="font-medium">Unlisted</span>
+                                    <p class="text-sm text-gray-400">Anyone with the link can access</p>
+                                </div>
+                            </label>
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                            </svg>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-3 rounded-lg hover:bg-night-lighter transition cursor-pointer">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="privacy" value="public" class="hidden">
+                                <div class="w-5 h-5 rounded-full border-2 border-gray-500 mr-3 flex items-center justify-center">
+                                    <div class="w-3 h-3 rounded-full bg-neon-pink public-radio hidden"></div>
+                                </div>
+                                <div>
+                                    <span class="font-medium">Public</span>
+                                    <p class="text-sm text-gray-400">Discoverable by everyone</p>
+                                </div>
+                            </label>
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between">
+                    <button id="delete-file" class="px-5 py-3 border border-red-500 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Delete File
+                    </button>
+                    <button id="save-settings" class="px-6 py-3 bg-neon-pink text-white rounded-lg hover:bg-neon-pink-light transition">
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            const uploadedFiles = document.getElementById('uploaded-files');
+            const fileList = document.getElementById('file-list');
+            const fileModal = document.getElementById('file-modal');
+            const closeModal = document.getElementById('close-modal');
+            const copyLink = document.getElementById('copy-link');
+            const shareLink = document.getElementById('share-link');
+            const saveSettings = document.getElementById('save-settings');
+            const deleteFile = document.getElementById('delete-file');
+            const privacyRadios = document.querySelectorAll('input[name="privacy"]');
+            const navLinks = document.querySelectorAll('.nav-link');
+            const pages = document.querySelectorAll('.page');
+            
+            let currentFileId = null;
+            
+            // Page navigation
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Update active nav link
+                    navLinks.forEach(navLink => {
+                        navLink.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    
+                    // Show the corresponding page
+                    const pageId = this.getAttribute('data-page');
+                    pages.forEach(page => {
+                        page.classList.remove('active');
+                    });
+                    document.getElementById(pageId).classList.add('active');
+                });
+            });
+            
+            // Handle drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.add('dragging');
+                });
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.remove('dragging');
+                });
+            });
+            
+            uploadArea.addEventListener('drop', handleDrop);
+            uploadArea.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFiles);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles({ target: { files } });
+            }
+            
+            function handleFiles(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    uploadedFiles.classList.remove('hidden');
+                    
+                    Array.from(files).forEach(file => {
+                        uploadFile(file);
+                    });
+                }
+            }
+            
+            function uploadFile(file) {
+                const fileId = generateId();
+                const fileItem = createFileItem(file, fileId);
+                fileList.appendChild(fileItem);
+                
+                // Simulate upload progress
+                let progress = 0;
+                const progressBar = fileItem.querySelector('.progress-bar');
+                const progressText = fileItem.querySelector('.progress-text');
+                const statusText = fileItem.querySelector('.status-text');
+                
+                const interval = setInterval(() => {
+                    progress += Math.random() * 10;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        
+                        setTimeout(() => {
+                            progressBar.style.width = '100%';
+                            progressText.textContent = '100%';
+                            statusText.textContent = 'Completed';
+                            
+                            const actionsDiv = fileItem.querySelector('.file-actions');
+                            actionsDiv.innerHTML = `
+                                <button class="view-details px-4 py-2 bg-night rounded-lg hover:bg-night-lighter text-neon-pink transition" data-id="${fileId}">
+                                    View Details
+                                </button>
+                            `;
+                            
+                            const viewDetailsBtn = actionsDiv.querySelector('.view-details');
+                            viewDetailsBtn.addEventListener('click', () => openFileModal(fileId, file.name));
+                        }, 500);
+                    } else {
+                        progressBar.style.width = `${progress}%`;
+                        progressText.textContent = `${Math.round(progress)}%`;
+                    }
+                }, 200);
+            }
+            
+            function createFileItem(file, id) {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item rounded-xl p-4 flex flex-col md:flex-row md:items-center';
+                fileItem.dataset.id = id;
+                
+                const fileIcon = getFileIcon(file.type);
+                const fileSize = formatFileSize(file.size);
+                
+                fileItem.innerHTML = `
+                    <div class="flex items-center mb-3 md:mb-0 md:mr-4">
+                        <div class="text-neon-pink mr-3">
+                            ${fileIcon}
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <h3 class="font-medium text-white truncate" title="${file.name}">${file.name}</h3>
+                            <p class="text-sm text-gray-400">${fileSize}</p>
+                        </div>
+                    </div>
+                    <div class="flex-grow md:mx-4 mb-3 md:mb-0">
+                        <div class="h-2 bg-night rounded-full overflow-hidden">
+                            <div class="progress-bar h-full w-0 rounded-full"></div>
+                        </div>
+                        <div class="flex justify-between mt-1 text-xs text-gray-400">
+                            <span class="progress-text">0%</span>
+                            <span class="status-text">Uploading...</span>
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="px-3 py-1 bg-night rounded-lg text-gray-400 cursor-not-allowed">
+                            Processing...
+                        </button>
+                    </div>
+                `;
+                
+                return fileItem;
+            }
+            
+            function getFileIcon(mimeType) {
+                if (mimeType.startsWith('image/')) {
+                    return `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>`;
+                } else if (mimeType.startsWith('video/')) {
+                    return `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>`;
+                } else if (mimeType.startsWith('audio/')) {
+                    return `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>`;
+                } else if (mimeType === 'application/pdf') {
+                    return `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>`;
+                } else {
+                    return `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+                    </svg>`;
+                }
+            }
+            
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            function generateId() {
+                return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            }
+            
+            function openFileModal(fileId, fileName) {
+                currentFileId = fileId;
+                document.getElementById('modal-title').textContent = fileName;
+                
+                // Generate a fake share link
+                const randomString = Math.random().toString(36).substring(2, 10);
+                shareLink.value = `https://nightshare.io/f/${randomString}`;
+                
+                fileModal.classList.remove('hidden');
+            }
+            
+            closeModal.addEventListener('click', () => {
+                fileModal.classList.add('hidden');
+                currentFileId = null;
+            });
+            
+            copyLink.addEventListener('click', () => {
+                shareLink.select();
+                document.execCommand('copy');
+                
+                const originalText = copyLink.textContent;
+                copyLink.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyLink.textContent = originalText;
+                }, 2000);
+            });
+            
+            privacyRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    document.querySelectorAll('.private-radio, .unlisted-radio, .public-radio').forEach(el => {
+                        el.classList.add('hidden');
+                    });
+                    
+                    document.querySelectorAll('input[name="privacy"]').forEach(input => {
+                        const parent = input.parentElement;
+                        const circle = parent.querySelector('div');
+                        circle.classList.remove('border-neon-pink');
+                        circle.classList.add('border-gray-500');
+                    });
+                    
+                    const selectedRadio = document.querySelector(`input[name="privacy"]:checked`);
+                    const parent = selectedRadio.parentElement;
+                    const circle = parent.querySelector('div');
+                    circle.classList.remove('border-gray-500');
+                    circle.classList.add('border-neon-pink');
+                    
+                    const indicator = document.querySelector(`.${selectedRadio.value}-radio`);
+                    indicator.classList.remove('hidden');
+                });
+            });
+            
+            saveSettings.addEventListener('click', () => {
+                const selectedPrivacy = document.querySelector('input[name="privacy"]:checked').value;
+                
+                // Show notification
+                const notification = document.createElement('div');
+                notification.className = 'fixed bottom-4 right-4 bg-neon-pink text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
+                notification.style.animation = 'fadeIn 0.3s ease';
+                notification.innerHTML = `
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>Settings saved! File is now <strong>${selectedPrivacy}</strong>.</span>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transition = 'opacity 0.5s ease';
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 500);
+                }, 3000);
+                
+                fileModal.classList.add('hidden');
+            });
+            
+            deleteFile.addEventListener('click', () => {
+                if (currentFileId) {
+                    const fileItem = document.querySelector(`.file-item[data-id="${currentFileId}"]`);
+                    if (fileItem) {
+                        fileItem.style.height = fileItem.offsetHeight + 'px';
+                        fileItem.style.opacity = '0';
+                        fileItem.style.transform = 'translateY(-20px)';
+                        fileItem.style.transition = 'all 0.3s ease';
+                        
+                        setTimeout(() => {
+                            fileItem.style.height = '0';
+                            fileItem.style.padding = '0';
+                            fileItem.style.margin = '0';
+                            fileItem.style.overflow = 'hidden';
+                            
+                            setTimeout(() => {
+                                fileList.removeChild(fileItem);
+                                
+                                if (fileList.children.length === 0) {
+                                    uploadedFiles.classList.add('hidden');
+                                }
+                            }, 300);
+                        }, 300);
+                    }
+                    
+                    // Show notification
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center';
+                    notification.style.animation = 'fadeIn 0.3s ease';
+                    notification.innerHTML = `
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        <span>File deleted successfully!</span>
+                    `;
+                    
+                    document.body.appendChild(notification);
+                    
+                    setTimeout(() => {
+                        notification.style.opacity = '0';
+                        notification.style.transition = 'opacity 0.5s ease';
+                        setTimeout(() => {
+                            document.body.removeChild(notification);
+                        }, 500);
+                    }, 3000);
+                    
+                    fileModal.classList.add('hidden');
+                    currentFileId = null;
+                }
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', (e) => {
+                if (e.target === fileModal) {
+                    fileModal.classList.add('hidden');
+                    currentFileId = null;
+                }
+            });
+            
+            // Add click event for "Start Uploading Now" button in About page
+            document.querySelector('.btn-pink').addEventListener('click', function() {
+                // Switch to home page
+                navLinks.forEach(navLink => {
+                    navLink.classList.remove('active');
+                    if (navLink.getAttribute('data-page') === 'home') {
+                        navLink.classList.add('active');
+                    }
+                });
+                
+                pages.forEach(page => {
+                    page.classList.remove('active');
+                });
+                document.getElementById('home').classList.add('active');
+                
+                // Scroll to upload area
+                document.getElementById('upload-area').scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'965036e3a1c257db',t:'MTc1MzQ5NDI5My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
